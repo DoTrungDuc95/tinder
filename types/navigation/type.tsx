@@ -8,6 +8,7 @@ export type RootStackParamList = {
   Home: undefined;
   Chat: undefined;
   Login: undefined;
+  Modal: undefined;
 };
 
 export type RootStackScreenProps<T extends keyof RootStackParamList> =
