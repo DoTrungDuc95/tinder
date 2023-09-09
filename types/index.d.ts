@@ -8,3 +8,17 @@ export type SwiperCard = {
   age: number;
   gender: 'male' | 'female';
 };
+
+export type MatchType = {
+  id: string;
+  match: string[];
+  users: {
+    [key: string]: SwiperCard;
+  };
+};
+
+export type MessageType = {
+  id: string;
+  userId: string;
+  message: string;
+};

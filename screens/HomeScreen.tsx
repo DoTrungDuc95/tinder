@@ -1,4 +1,11 @@
-import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Image,
+  StyleSheet,
+  ActivityIndicator,
+} from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import React, { useRef, useState, useEffect } from 'react';
 
@@ -8,10 +15,20 @@ import { AntDesign, Entypo, Ionicons } from '@expo/vector-icons';
 import useAuth from '../hooks/useAuth';
 import SafeView from '../components/safeAreas/SafeView';
 import { RootStackScreenProps } from '../types/navigation/type';
-import { people } from '../client-data';
 import type { SwiperCard } from '../types';
-import { collection, doc, onSnapshot } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  onSnapshot,
+  query,
+  serverTimestamp,
+  setDoc,
+  where,
+} from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { generateId } from '../lib';
 
 type HomeScreenProps = {
   navigation: RootStackScreenProps<'Home'>['navigation'];
@@ -21,7 +38,8 @@ const HomeScreen = ({ navigation }: HomeScreenProps) => {
   const { signOut, user: userInfo } = useAuth();
   const user = userInfo!.user;
 
-  const [profiles, setProfiles] = useState<SwiperCard[]>([]);
+  const [profiles, setProfiles] = useState<SwiperCard[]>();
+  const [myProfiles, setMyProfiles] = useState<SwiperCard>();
   const [cardIndex, setCardIndex] = useState(-1);
 
   const swiperRef = useRef<Swiper<SwiperCard>>(null);
@@ -30,21 +48,100 @@ const HomeScreen = ({ navigation }: HomeScreenProps) => {
     onSnapshot(doc(db, 'user', user.id), (data) => {
       if (!data.exists()) navigation.replace('Modal');
     });
-  }, []);
+  }, [user.id]);
 
   useEffect(() => {
-    onSnapshot(collection(db, 'user'), (data) => {
-      const users = data.docs.map((doc) => {
-        const copy = { ...doc.data() };
-        delete copy.timestamp;
-        copy.id = doc.id;
+    const getMine = async () => {
+      const mine = await getDoc(doc(db, 'user', user.id));
 
-        return copy as SwiperCard;
-      });
+      const { timestamp, ...rest } = mine.data() as SwiperCard & {
+        timestamp: any;
+      };
 
-      setProfiles(users);
+      setMyProfiles(rest);
+    };
+
+    getMine();
+  }, [user.id]);
+
+  useEffect(() => {
+    const getProfiles = async () => {
+      try {
+        const pass = ['test'];
+
+        // await getDocs(collection(db, 'user', user.id, 'pass')).then((data) => {
+        //   const temp = data.docs.map((doc) => doc.id);
+        //   pass.push(...temp);
+        // });
+
+        // await getDocs(collection(db, 'user', user.id, 'ok')).then((data) => {
+        //   const temp = data.docs.map((doc) => doc.id);
+        //   pass.push(...temp);
+        // });
+
+        onSnapshot(
+          query(collection(db, 'user'), where('id', 'not-in', pass)),
+          (data) => {
+            const users = data.docs
+              .filter((doc) => doc.id !== user.id)
+              .map((doc) => {
+                const { timestamp, ...rest } = doc.data();
+                return { id: doc.id, ...rest } as SwiperCard;
+              });
+
+            setProfiles(users);
+          }
+        );
+      } catch (error) {
+        console.log(error);
+      }
+    };
+
+    getProfiles();
+  }, [user.id]);
+
+  const swipeLeft = async (index: number) => {
+    if (!profiles || !profiles[index]) return;
+
+    const profile = profiles[index];
+
+    setDoc(doc(db, 'user', user.id, 'pass', profile.id), { profile });
+  };
+
+  const swipeRight = async (index: number) => {
+    if (!profiles || !profiles[index]) return;
+
+    const profile = profiles[index];
+
+    getDoc(doc(db, 'user', profile.id, 'ok', user.id)).then((data) => {
+      if (data.exists()) {
+        setDoc(doc(db, 'match', generateId(user.id, profile.id)), {
+          users: {
+            [user.id]: myProfiles!,
+            [profile.id]: profile,
+          },
+          match: [user.id, profile.id],
+          timestamp: serverTimestamp(),
+        });
+
+        navigation.navigate('Match', {
+          me: myProfiles!,
+          you: profile,
+        });
+      }
+
+      setDoc(doc(db, 'user', user.id, 'ok', profile.id), { profile });
     });
-  }, []);
+  };
+
+  if (!profiles)
+    return (
+      <View className="flex-1 items-center justify-center">
+        <StatusBar />
+
+        <ActivityIndicator size={'large'} color={'#ff5864'} />
+      </View>
+    );
 
   return (
     <SafeView top>
@@ -82,12 +179,8 @@ const HomeScreen = ({ navigation }: HomeScreenProps) => {
             backgroundColor="#ccc0"
             keyExtractor={(card) => card.id.toString()}
             onSwiped={(index) => setCardIndex(index)}
-            onSwipedLeft={(index) => {
-              console.log(index);
-            }}
-            onSwipedRight={(index) => {
-              console.log(index);
-            }}
+            onSwipedLeft={swipeLeft}
+            onSwipedRight={swipeRight}
             overlayLabels={{
               left: {
                 title: 'NOPE',

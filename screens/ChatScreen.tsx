@@ -1,12 +1,20 @@
-import { View, Text } from 'react-native'
-import React from 'react'
+import { View, Text } from 'react-native';
+import React from 'react';
+import SafeView from '../components/safeAreas/SafeView';
+import Header from '../components/Header';
+import ChatList from '../components/chat/ChatList';
+import { StatusBar } from 'expo-status-bar';
 
 const ChatScreen = () => {
   return (
-    <View>
-      <Text>ChatScreen</Text>
-    </View>
-  )
-}
+    <SafeView top>
+      <StatusBar />
+      
+      <Header title="Chat" />
 
-export default ChatScreen
+      <ChatList />
+    </SafeView>
+  );
+};
+
+export default ChatScreen;
